@@ -7,10 +7,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_mail import Mail, Message
 from flask_migrate import Migrate
 import secrets
+from itsdangerous import TimedJSONWebSignatureSerializer as Serializer  # Для создания токенов
 
 app = Flask(__name__)
-
-
 
 # Конфигурация приложения
 app.config['SECRET_KEY'] = 's3cr3t_k3y_for_my_flask_app_12345'
@@ -24,7 +23,6 @@ app.config['MAIL_USERNAME'] = 'dmitriy.gavrilov.1975@internet.ru'  # Ваша п
 app.config['MAIL_PASSWORD'] = 'J091TdwKPSNadvwmtprG'  # Ваш пароль от почты
 app.config['MAIL_USE_TLS'] = False
 app.config['MAIL_USE_SSL'] = True  # Mail.ru использует SSL на порте 465
-
 
 # Инициализация базы данных и почты
 db = SQLAlchemy(app)
@@ -58,6 +56,20 @@ def validate_password(password):
     if len(password) < 6:
         return False
     return True
+
+# Функция для генерации токена
+def get_reset_token(user, expires_sec=1800):
+    s = Serializer(app.config['SECRET_KEY'], expires_sec)
+    return s.dumps({'user_id': user.id}).decode('utf-8')
+
+# Функция для проверки токена
+def verify_reset_token(token):
+    s = Serializer(app.config['SECRET_KEY'])
+    try:
+        user_id = s.loads(token)['user_id']
+    except:
+        return None
+    return User.query.get(user_id)
 
 # Главная страница
 @app.route('/')
@@ -126,31 +138,38 @@ def reset_request():
 # Восстановление пароля
 @app.route('/reset_password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
-    user = User.query.filter_by(reset_token=token).first()
-    if user is None:
+    user = verify_reset_token(token)
+    if not user:
         flash('Неверный или истекший токен.', 'danger')
         return redirect(url_for('reset_request'))
 
     if request.method == 'POST':
         password = request.form['password']
+        confirm_password = request.form['confirm_password']
+
+        # Проверка совпадения пароля и подтверждения
+        if password != confirm_password:
+            flash('Пароли не совпадают. Попробуйте снова.', 'danger')
+            return redirect(url_for('reset_password', token=token))
+
+        # Проверка длины пароля
         if not validate_password(password):
             flash('Пароль должен быть длиной не менее 6 символов.', 'danger')
             return redirect(url_for('reset_password', token=token))
 
+        # Обновление пароля пользователя
         user.set_password(password)
-        user.reset_token = None
+        user.reset_token = None  # Удаляем токен после успешного сброса пароля
         db.session.commit()
         flash('Ваш пароль успешно обновлен. Теперь вы можете войти в систему.', 'success')
         return redirect(url_for('login'))
 
     return render_template('reset_password.html')
 
+
 # Функция отправки письма с токеном восстановления пароля
 def send_reset_email(user):
-    token = secrets.token_hex(16)
-    user.reset_token = token
-    db.session.commit()
-
+    token = get_reset_token(user)
     msg = Message('Восстановление пароля', sender='dmitriy.gavrilov.1975@internet.ru', recipients=[user.email])
     msg.body = f'''Для восстановления пароля перейдите по следующей ссылке:
 {url_for('reset_password', token=token, _external=True)}
