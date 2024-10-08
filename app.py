@@ -178,6 +178,17 @@ def send_reset_email(user):
 '''
     mail.send(msg)
 
+
+city_to_iata = {
+    'Москва': 'MOW',
+    'Казань': 'KZN',
+    'Санкт-Петербург': 'LED',
+    'Лондон': 'LHR',
+    'Париж': 'CDG',
+    'Нью-Йорк': 'JFK',
+    'Токио': 'HND'
+}
+
 # Поиск рейсов
 @app.route('/search', methods=['POST'])
 @login_required
@@ -218,6 +229,7 @@ def search():
     return render_template('results.html', flights=flights, from_city=from_city_name, to_city=to_city_name,
                            departure_date=departure_date, return_date=return_date,
                            passengers=passengers)
+
 
 
 if __name__ == '__main__':
