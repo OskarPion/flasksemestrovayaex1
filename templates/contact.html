@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <h2>Контакты</h2>
+    <p>Свяжитесь с нашей командой:</p>
+    <ul>
+        <li>Email: dmitriy.gavrilov.1975@internet.ru</li>
+        <li>Телефон: +7 909 *** ** **</li>
+        <li>Адрес: Кремлевская 35</li>
+    </ul>
+    <form method="POST" action="{{ url_for('contact') }}">
+        <div class="mb-3">
+            <label for="message" class="form-label">Ваше сообщение:</label>
+            <textarea id="message" name="message" class="form-control" rows="5" required></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Отправить</button>
+    </form>
+</div>
+{% endblock %}

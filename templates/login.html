@@ -3,16 +3,24 @@
 <div class="container">
     <h2>Вход в систему</h2>
     <form method="POST">
-        <label>Email:</label>
-        <input type="email" id="email" name="email" required>
+        <div class="mb-3">
+            <label for="email" class="form-label">Email:</label>
+            <input type="email" id="email" name="email" class="form-control" required>
+        </div>
 
-        <label>Пароль:</label>
-        <input type="password" id="password" name="password" required>
+        <div class="mb-3">
+            <label for="password" class="form-label">Пароль:</label>
+            <input type="password" id="password" name="password" class="form-control" required>
+        </div>
 
-        <button type="submit">Войти</button>
+        <button type="submit" class="btn btn-primary">Войти</button>
     </form>
 
-    <!-- Добавляем ссылку для восстановления пароля -->
-    <p><a href="{{ url_for('reset_request') }}">Забыли пароль?</a></p>
+    <div class="mt-3">
+        <!-- Ссылка для восстановления пароля -->
+        <p><a href="{{ url_for('reset_request') }}">Забыли пароль?</a></p>
+        <!-- Кнопка для регистрации -->
+        <p>Еще не зарегистрированы? <a href="{{ url_for('register') }}" class="btn btn-link">Зарегистрироваться</a></p>
+    </div>
 </div>
 {% endblock %}

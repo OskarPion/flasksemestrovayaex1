@@ -122,6 +122,23 @@ def logout():
     flash('Вы вышли из системы.', 'info')
     return redirect(url_for('home'))
 
+
+@app.route('/profile')
+@login_required
+def profile():
+    return render_template('profile.html')
+
+@app.route('/contact', methods=['GET', 'POST'])
+def contact():
+    if request.method == 'POST':
+        message = request.form['message']
+        # Логика для обработки сообщения (например, отправка email или сохранение в базе данных)
+        flash('Сообщение отправлено!', 'success')
+        return redirect(url_for('contact'))
+    return render_template('contact.html')
+
+
+
 # Запрос на восстановление пароля
 @app.route('/reset_request', methods=['GET', 'POST'])
 def reset_request():
@@ -176,7 +193,7 @@ def send_reset_email(user):
 
 Если вы не запрашивали восстановление пароля, просто проигнорируйте это письмо.
 '''
-    mail.send(msg)
+    mail.send(msg) #
 
 
 city_to_iata = {
