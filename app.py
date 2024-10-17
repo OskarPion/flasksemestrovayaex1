@@ -1,5 +1,6 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 import requests
+import os
 import config
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -7,7 +8,10 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_mail import Mail, Message
 from flask_migrate import Migrate
 import secrets
-from itsdangerous import TimedJSONWebSignatureSerializer as Serializer  # Для создания токенов
+from itsdangerous import URLSafeTimedSerializer as Serializer
+from flask_dance.contrib.github import make_github_blueprint, github
+from oauthlib.oauth2 import WebApplicationClient
+from requests_oauthlib import OAuth2Session
 
 app = Flask(__name__)
 
@@ -19,10 +23,10 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # Настройки для почты
 app.config['MAIL_SERVER'] = 'smtp.mail.ru'
 app.config['MAIL_PORT'] = 465
-app.config['MAIL_USERNAME'] = 'dmitriy.gavrilov.1975@internet.ru'  # Ваша почта
-app.config['MAIL_PASSWORD'] = 'J091TdwKPSNadvwmtprG'  # Ваш пароль от почты
+app.config['MAIL_USERNAME'] = 'dmitriy.gavrilov.1975@internet.ru'
+app.config['MAIL_PASSWORD'] = 'J091TdwKPSNadvwmtprG'
 app.config['MAIL_USE_TLS'] = False
-app.config['MAIL_USE_SSL'] = True  # Mail.ru использует SSL на порте 465
+app.config['MAIL_USE_SSL'] = True
 
 # Инициализация базы данных и почты
 db = SQLAlchemy(app)
@@ -33,9 +37,11 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
 
 # Модель пользователя
 class User(UserMixin, db.Model):
@@ -51,16 +57,19 @@ class User(UserMixin, db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
+
 # Валидация пароля
 def validate_password(password):
     if len(password) < 6:
         return False
     return True
 
+
 # Функция для генерации токена
 def get_reset_token(user, expires_sec=1800):
     s = Serializer(app.config['SECRET_KEY'], expires_sec)
     return s.dumps({'user_id': user.id}).decode('utf-8')
+
 
 # Функция для проверки токена
 def verify_reset_token(token):
@@ -71,10 +80,77 @@ def verify_reset_token(token):
         return None
     return User.query.get(user_id)
 
+
+# GitHub OAuth
+github_blueprint = make_github_blueprint(
+    client_id=os.getenv("GITHUB_CLIENT_ID"),
+    client_secret=os.getenv("GITHUB_CLIENT_SECRET"),
+    redirect_to="github_login"
+)
+app.register_blueprint(github_blueprint, url_prefix="/github")
+
+
+
+
+YANDEX_CLIENT_ID = config.YANDEX_CLIENT_ID
+YANDEX_CLIENT_SECRET = config.YANDEX_CLIENT_SECRET
+YANDEX_AUTHORIZATION_BASE_URL = "https://oauth.yandex.ru/authorize"
+YANDEX_TOKEN_URL = "https://oauth.yandex.ru/token"
+YANDEX_USER_INFO_URL = "https://login.yandex.ru/info"
+
+yandex_client = WebApplicationClient(YANDEX_CLIENT_ID)
+
+@app.route('/login/yandex')
+def yandex_login():
+    # URL для запроса авторизации
+    request_uri = yandex_client.prepare_request_uri(
+        YANDEX_AUTHORIZATION_BASE_URL,
+        redirect_uri="http://127.0.0.1:5000/yandex/callback",  # URL для редиректа после успешной авторизации
+        scope=["login:email"]
+    )
+    return redirect(request_uri)
+
+@app.route('/yandex/callback')
+def yandex_callback():
+    # Получаем авторизационный код из запроса
+    code = request.args.get('code')
+
+    # Подготавливаем запрос на получение токена
+    token_url, headers, body = yandex_client.prepare_token_request(
+        YANDEX_TOKEN_URL,
+        authorization_response=request.url,
+        redirect_url="http://127.0.0.1:5000/yandex/callback",
+        code=code
+    )
+
+    # Выполняем запрос на получение токена
+    token_response = requests.post(
+        token_url,
+        headers=headers,
+        data=body,
+        auth=(YANDEX_CLIENT_ID, YANDEX_CLIENT_SECRET)
+    )
+
+    # Парсим токен
+    yandex_client.parse_request_body_response(token_response.text)
+
+    # Запрашиваем информацию о пользователе
+    uri, headers, body = yandex_client.add_token(YANDEX_USER_INFO_URL)
+    user_info_response = requests.get(uri, headers=headers, data=body)
+
+    # Получаем информацию о пользователе
+    user_info = user_info_response.json()
+    session['email'] = user_info.get('default_email')
+
+    return redirect(url_for('profile'))
+
+
+
 # Главная страница
 @app.route('/')
 def home():
     return render_template('search.html')
+
 
 # Регистрация
 @app.route('/register', methods=['GET', 'POST'])
@@ -84,7 +160,6 @@ def register():
         email = request.form['email']
         password = request.form['password']
 
-        # Проверка валидности email и пароля
         if '@' not in email:
             flash('Неверный формат email.', 'danger')
             return redirect(url_for('register'))
@@ -100,6 +175,7 @@ def register():
         return redirect(url_for('login'))
     return render_template('register.html')
 
+
 # Вход в систему
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -114,6 +190,7 @@ def login():
         flash('Неправильные учетные данные. Попробуйте снова.', 'danger')
     return render_template('login.html')
 
+
 # Выход из системы
 @app.route('/logout')
 @login_required
@@ -124,19 +201,20 @@ def logout():
 
 
 @app.route('/profile')
-@login_required
 def profile():
-    return render_template('profile.html')
+    if 'email' in session:
+        return f"Logged in as: {session['email']}"
+    return redirect(url_for('login'))
 
+
+# Страница контактов
 @app.route('/contact', methods=['GET', 'POST'])
 def contact():
     if request.method == 'POST':
         message = request.form['message']
-        # Логика для обработки сообщения (например, отправка email или сохранение в базе данных)
         flash('Сообщение отправлено!', 'success')
         return redirect(url_for('contact'))
     return render_template('contact.html')
-
 
 
 # Запрос на восстановление пароля
@@ -152,6 +230,7 @@ def reset_request():
         flash('Пользователь с таким email не найден.', 'danger')
     return render_template('reset_request.html')
 
+
 # Восстановление пароля
 @app.route('/reset_password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
@@ -163,37 +242,27 @@ def reset_password(token):
     if request.method == 'POST':
         password = request.form['password']
         confirm_password = request.form['confirm_password']
-
-        # Проверка совпадения пароля и подтверждения
         if password != confirm_password:
             flash('Пароли не совпадают. Попробуйте снова.', 'danger')
             return redirect(url_for('reset_password', token=token))
-
-        # Проверка длины пароля
         if not validate_password(password):
             flash('Пароль должен быть длиной не менее 6 символов.', 'danger')
             return redirect(url_for('reset_password', token=token))
-
-        # Обновление пароля пользователя
         user.set_password(password)
-        user.reset_token = None  # Удаляем токен после успешного сброса пароля
         db.session.commit()
-        flash('Ваш пароль успешно обновлен. Теперь вы можете войти в систему.', 'success')
+        flash('Пароль успешно изменен. Вы можете войти.', 'success')
         return redirect(url_for('login'))
-
     return render_template('reset_password.html')
 
 
-# Функция отправки письма с токеном восстановления пароля
+# Функция для отправки письма с восстановлением пароля
 def send_reset_email(user):
     token = get_reset_token(user)
-    msg = Message('Восстановление пароля', sender='dmitriy.gavrilov.1975@internet.ru', recipients=[user.email])
-    msg.body = f'''Для восстановления пароля перейдите по следующей ссылке:
+    msg = Message('Восстановление пароля', sender='noreply@demo.com', recipients=[user.email])
+    msg.body = f'''Чтобы восстановить пароль, перейдите по следующей ссылке:
 {url_for('reset_password', token=token, _external=True)}
-
-Если вы не запрашивали восстановление пароля, просто проигнорируйте это письмо.
 '''
-    mail.send(msg) #
+    mail.send(msg)
 
 
 city_to_iata = {
@@ -206,7 +275,7 @@ city_to_iata = {
     'Токио': 'HND'
 }
 
-# Поиск рейсов
+
 @app.route('/search', methods=['POST'])
 @login_required
 def search():
@@ -216,12 +285,13 @@ def search():
     return_date = request.form['return']
     passengers = request.form['passengers']
 
-    # Преобразование названий городов в IATA-коды
+    # Convert city names to IATA codes
     from_city = city_to_iata.get(from_city_name, None)
     to_city = city_to_iata.get(to_city_name, None)
 
     if not from_city or not to_city:
-        return "Некорректные города. Пожалуйста, проверьте правильность ввода."
+        flash("Некорректные города. Пожалуйста, проверьте правильность ввода.", 'danger')
+        return redirect(url_for('home'))
 
     params = {
         'origin': from_city,
@@ -233,20 +303,20 @@ def search():
         'limit': 5
     }
 
+
     response = requests.get(config.BASE_URL, params=params)
     data = response.json()
 
     if response.status_code == 200 and 'data' in data:
         flights = data['data']
         for flight in flights:
-            print(flight)  # Выводим весь объект рейса для проверки
+            print(flight)
     else:
         flights = []
 
     return render_template('results.html', flights=flights, from_city=from_city_name, to_city=to_city_name,
                            departure_date=departure_date, return_date=return_date,
                            passengers=passengers)
-
 
 
 if __name__ == '__main__':
