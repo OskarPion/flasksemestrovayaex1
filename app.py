@@ -13,6 +13,8 @@ from flask_dance.contrib.github import make_github_blueprint, github
 from oauthlib.oauth2 import WebApplicationClient
 from requests_oauthlib import OAuth2Session
 
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+
 app = Flask(__name__)
 
 # Конфигурация приложения
@@ -85,9 +87,41 @@ def verify_reset_token(token):
 github_blueprint = make_github_blueprint(
     client_id=os.getenv("GITHUB_CLIENT_ID"),
     client_secret=os.getenv("GITHUB_CLIENT_SECRET"),
-    redirect_to="github_login"
+    redirect_url="/github/callback"
 )
 app.register_blueprint(github_blueprint, url_prefix="/github")
+
+@app.route('/github/callback')
+def github_callback():
+    if not github.authorized:
+        return redirect(url_for('login'))
+
+    account_info = github.get('/user')
+
+    if account_info.ok:
+        account_data = account_info.json()
+        email = account_data['email']  # Получаем email из ответа
+        username = account_data['login']  # Используем GitHub login
+
+        # Проверяем, есть ли пользователь с таким email
+        user = User.query.filter_by(email=email).first()
+
+        if user is None:
+            # Если пользователя нет, создаем нового
+            user = User(username=username, email=email)
+            user.set_password(secrets.token_hex(8))  # Генерируем случайный пароль
+            db.session.add(user)
+            db.session.commit()
+
+        # Выполняем вход в систему
+        login_user(user)
+
+        # Редирект на главную страницу
+        return redirect(url_for('home'))
+    else:
+        flash('Ошибка авторизации через GitHub.', 'danger')
+        return redirect(url_for('login'))
+
 
 
 
@@ -99,6 +133,8 @@ YANDEX_TOKEN_URL = "https://oauth.yandex.ru/token"
 YANDEX_USER_INFO_URL = "https://login.yandex.ru/info"
 
 yandex_client = WebApplicationClient(YANDEX_CLIENT_ID)
+yandex = OAuth2Session(YANDEX_CLIENT_ID, redirect_uri="http://127.0.0.1:5000/yandex/callback")
+
 
 @app.route('/login/yandex')
 def yandex_login():
@@ -110,40 +146,44 @@ def yandex_login():
     )
     return redirect(request_uri)
 
+
 @app.route('/yandex/callback')
 def yandex_callback():
-    # Получаем авторизационный код из запроса
-    code = request.args.get('code')
-
-    # Подготавливаем запрос на получение токена
-    token_url, headers, body = yandex_client.prepare_token_request(
+    # Получаем токен после авторизации
+    token = yandex.fetch_token(
         YANDEX_TOKEN_URL,
-        authorization_response=request.url,
-        redirect_url="http://127.0.0.1:5000/yandex/callback",
-        code=code
+        client_secret=YANDEX_CLIENT_SECRET,
+        authorization_response=request.url
     )
 
-    # Выполняем запрос на получение токена
-    token_response = requests.post(
-        token_url,
-        headers=headers,
-        data=body,
-        auth=(YANDEX_CLIENT_ID, YANDEX_CLIENT_SECRET)
-    )
+    # Используем токен для получения информации о пользователе
+    resp = yandex.get(YANDEX_USER_INFO_URL)
 
-    # Парсим токен
-    yandex_client.parse_request_body_response(token_response.text)
+    if resp.ok:
+        account_info = resp.json()
+        email = account_info.get('default_email', None)  # Получаем email пользователя
+        username = account_info.get('login', 'NoUsername')  # Получаем логин пользователя
 
-    # Запрашиваем информацию о пользователе
-    uri, headers, body = yandex_client.add_token(YANDEX_USER_INFO_URL)
-    user_info_response = requests.get(uri, headers=headers, data=body)
+        if email is None:
+            flash('Не удалось получить email от Яндекс.', 'danger')
+            return redirect(url_for('login'))
 
-    # Получаем информацию о пользователе
-    user_info = user_info_response.json()
-    session['email'] = user_info.get('default_email')
+        # Проверяем, существует ли пользователь
+        user = User.query.filter_by(email=email).first()
+        if user is None:
+            # Если пользователя нет, создаем нового
+            user = User(username=username, email=email)
+            db.session.add(user)
+            db.session.commit()
 
-    return redirect(url_for('profile'))
+        # Входим в систему
+        login_user(user)
 
+        # Перенаправляем на профиль
+        return redirect(url_for('profile'))
+    else:
+        flash('Ошибка при авторизации через Яндекс.', 'danger')
+        return redirect(url_for('login'))
 
 
 # Главная страница
@@ -201,10 +241,10 @@ def logout():
 
 
 @app.route('/profile')
+@login_required
 def profile():
-    if 'email' in session:
-        return f"Logged in as: {session['email']}"
-    return redirect(url_for('login'))
+    return render_template('profile.html', current_user=current_user)
+
 
 
 # Страница контактов
