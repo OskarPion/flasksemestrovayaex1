@@ -1,18 +1,22 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session
-import requests
 import os
+from flask import Flask, render_template, request, redirect, url_for, flash, session, current_app
+import requests
 import config
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_dance.contrib.github import make_github_blueprint, github
 from flask_mail import Mail, Message
 from flask_migrate import Migrate
-import secrets
-from itsdangerous import URLSafeTimedSerializer as Serializer
-from flask_dance.contrib.github import make_github_blueprint, github
 from oauthlib.oauth2 import WebApplicationClient
 from requests_oauthlib import OAuth2Session
+import secrets
+from itsdangerous import URLSafeTimedSerializer as Serializer
+from extensions import db, mail, migrate, login_manager
+from models import User, Flight, Booking, Payment, Review
 
+
+# Flask configuration
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 app = Flask(__name__)
@@ -22,6 +26,9 @@ app.config['SECRET_KEY'] = 's3cr3t_k3y_for_my_flask_app_12345'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:postgres@localhost/semestrflask1bd'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# Конфигурация соли для безопасности
+app.config['SECURITY_PASSWORD_SALT'] = 'my_super_secret_salt'
+
 # Настройки для почты
 app.config['MAIL_SERVER'] = 'smtp.mail.ru'
 app.config['MAIL_PORT'] = 465
@@ -30,34 +37,18 @@ app.config['MAIL_PASSWORD'] = 'J091TdwKPSNadvwmtprG'
 app.config['MAIL_USE_TLS'] = False
 app.config['MAIL_USE_SSL'] = True
 
-# Инициализация базы данных и почты
-db = SQLAlchemy(app)
-mail = Mail(app)
+# Инициализация расширений
+db.init_app(app)
+mail.init_app(app)
+migrate.init_app(app, db)
 
 # Инициализация Flask-Login
-login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
-
 
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
-
-
-# Модель пользователя
-class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(150), unique=True, nullable=False)
-    email = db.Column(db.String(150), unique=True, nullable=False)
-    password_hash = db.Column(db.String(150), nullable=False)
-    reset_token = db.Column(db.String(100), nullable=True)
-
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
 
 
 # Валидация пароля
@@ -68,62 +59,58 @@ def validate_password(password):
 
 
 # Функция для генерации токена
-def get_reset_token(user, expires_sec=1800):
-    s = Serializer(app.config['SECRET_KEY'], expires_sec)
-    return s.dumps({'user_id': user.id}).decode('utf-8')
-
+def get_reset_token(user, expires_in=1800):
+    s = Serializer(current_app.config['SECRET_KEY'])
+    return s.dumps({'user_id': user.id}, salt=current_app.config['SECURITY_PASSWORD_SALT'])
 
 # Функция для проверки токена
-def verify_reset_token(token):
-    s = Serializer(app.config['SECRET_KEY'])
+def verify_reset_token(token, expires_in=1800):
+    s = Serializer(current_app.config['SECRET_KEY'])
     try:
-        user_id = s.loads(token)['user_id']
-    except:
+        user_id = s.loads(token, salt=current_app.config['SECURITY_PASSWORD_SALT'], max_age=expires_in)['user_id']
+    except Exception as e:
+        print(f"Error verifying token: {e}")  # Логирование ошибки для отладки
         return None
     return User.query.get(user_id)
-
 
 # GitHub OAuth
 github_blueprint = make_github_blueprint(
     client_id=os.getenv("GITHUB_CLIENT_ID"),
     client_secret=os.getenv("GITHUB_CLIENT_SECRET"),
-    redirect_url="/github/callback"
+    redirect_to="github_callback"
 )
 app.register_blueprint(github_blueprint, url_prefix="/github")
 
+
 @app.route('/github/callback')
 def github_callback():
+    print("GitHub callback route hit!")  # Отладочное сообщение
+
     if not github.authorized:
+        print("Not authorized, redirecting to login")
         return redirect(url_for('login'))
 
     account_info = github.get('/user')
+    print(f"Account info: {account_info}")
 
     if account_info.ok:
         account_data = account_info.json()
-        email = account_data['email']  # Получаем email из ответа
-        username = account_data['login']  # Используем GitHub login
+        email = account_data.get('email')
+        username = account_data.get('login')
+        print(f"GitHub user email: {email}, username: {username}")
 
-        # Проверяем, есть ли пользователь с таким email
         user = User.query.filter_by(email=email).first()
 
         if user is None:
-            # Если пользователя нет, создаем нового
             user = User(username=username, email=email)
-            user.set_password(secrets.token_hex(8))  # Генерируем случайный пароль
             db.session.add(user)
             db.session.commit()
 
-        # Выполняем вход в систему
         login_user(user)
-
-        # Редирект на главную страницу
         return redirect(url_for('home'))
     else:
         flash('Ошибка авторизации через GitHub.', 'danger')
         return redirect(url_for('login'))
-
-
-
 
 
 YANDEX_CLIENT_ID = config.YANDEX_CLIENT_ID
@@ -184,6 +171,65 @@ def yandex_callback():
     else:
         flash('Ошибка при авторизации через Яндекс.', 'danger')
         return redirect(url_for('login'))
+
+
+@app.route('/flights/add', methods=['GET', 'POST'])
+@login_required
+def add_flight():
+    if request.method == 'POST':
+        flight_number = request.form['flight_number']
+        departure = request.form['departure']
+        arrival = request.form['arrival']
+        price = request.form['price']
+
+        new_flight = Flight(
+            flight_number=flight_number,
+            departure=departure,
+            arrival=arrival,
+            price=price
+        )
+
+        db.session.add(new_flight)
+        db.session.commit()
+        flash('Рейс успешно добавлен!', 'success')
+        return redirect(url_for('view_flights'))
+
+    return render_template('add_flight.html')
+
+
+@app.route('/flights', methods=['GET'])
+@login_required
+def view_flights():
+    flights = Flight.query.all()
+    return render_template('view_flights.html', flights=flights)
+
+
+@app.route('/flights/edit/<int:flight_id>', methods=['GET', 'POST'])
+@login_required
+def edit_flight(flight_id):
+    flight = Flight.query.get_or_404(flight_id)
+
+    if request.method == 'POST':
+        flight.flight_number = request.form['flight_number']
+        flight.departure = request.form['departure']
+        flight.arrival = request.form['arrival']
+        flight.price = request.form['price']
+
+        db.session.commit()
+        flash('Рейс успешно обновлен!', 'success')
+        return redirect(url_for('view_flights'))
+
+    return render_template('edit_flight.html', flight=flight)
+
+
+@app.route('/flights/delete/<int:flight_id>', methods=['POST'])
+@login_required
+def delete_flight(flight_id):
+    flight = Flight.query.get_or_404(flight_id)
+    db.session.delete(flight)
+    db.session.commit()
+    flash('Рейс успешно удален!', 'info')
+    return redirect(url_for('view_flights'))
 
 
 # Главная страница
@@ -295,14 +341,20 @@ def reset_password(token):
     return render_template('reset_password.html')
 
 
-# Функция для отправки письма с восстановлением пароля
 def send_reset_email(user):
     token = get_reset_token(user)
-    msg = Message('Восстановление пароля', sender='noreply@demo.com', recipients=[user.email])
+    reset_url = url_for('reset_password', token=token, _external=True)
+
+    # Убедитесь, что тело письма корректно формируется
+    msg = Message('Восстановление пароля', sender='dmitriy.gavrilov.1975@internet.ru', recipients=[user.email])
     msg.body = f'''Чтобы восстановить пароль, перейдите по следующей ссылке:
-{url_for('reset_password', token=token, _external=True)}
+{reset_url}
 '''
-    mail.send(msg)
+
+    try:
+        mail.send(msg)
+    except Exception as e:
+        print(f"Ошибка отправки email: {e}")  # Для отладки
 
 
 city_to_iata = {
@@ -361,5 +413,5 @@ def search():
 
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()  # Создаем таблицы
+        db.create_all()
     app.run(debug=True)

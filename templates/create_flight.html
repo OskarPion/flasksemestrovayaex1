@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Создание нового рейса</h1>
+<form action="{{ url_for('create_flight') }}" method="post">
+    <div class="mb-3">
+        <label for="departure_city" class="form-label">Откуда</label>
+        <input type="text" class="form-control" name="departure_city" id="departure_city" required>
+    </div>
+    <div class="mb-3">
+        <label for="arrival_city" class="form-label">Куда</label>
+        <input type="text" class="form-control" name="arrival_city" id="arrival_city" required>
+    </div>
+    <div class="mb-3">
+        <label for="departure_date" class="form-label">Дата вылета</label>
+        <input type="date" class="form-control" name="departure_date" id="departure_date" required>
+    </div>
+    <div class="mb-3">
+        <label for="return_date" class="form-label">Дата возврата</label>
+        <input type="date" class="form-control" name="return_date" id="return_date">
+    </div>
+    <div class="mb-3">
+        <label for="flight_price" class="form-label">Цена</label>
+        <input type="number" class="form-control" name="flight_price" id="flight_price" required>
+    </div>
+    <button type="submit" class="btn btn-custom">Создать рейс</button>
+</form>
+{% endblock %}

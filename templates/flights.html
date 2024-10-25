@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Список рейсов</h1>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Откуда</th>
+            <th>Куда</th>
+            <th>Дата вылета</th>
+            <th>Дата возврата</th>
+            <th>Цена</th>
+            <th>Действия</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for flight in flights %}
+        <tr>
+            <td>{{ flight.from }}</td>
+            <td>{{ flight.to }}</td>
+            <td>{{ flight.departure }}</td>
+            <td>{{ flight.return }}</td>
+            <td>{{ flight.price }}</td>
+            <td>
+                <a href="{{ url_for('flight_details', flight_id=flight.id) }}" class="btn btn-info">Просмотреть</a>
+                <a href="{{ url_for('edit_flight', flight_id=flight.id) }}" class="btn btn-warning">Редактировать</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<a href="{{ url_for('create_flight') }}" class="btn btn-custom">Добавить рейс</a>
+{% endblock %}
