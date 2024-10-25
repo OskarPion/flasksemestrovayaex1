@@ -177,15 +177,17 @@ def yandex_callback():
 @login_required
 def add_flight():
     if request.method == 'POST':
-        flight_number = request.form['flight_number']
-        departure = request.form['departure']
-        arrival = request.form['arrival']
-        price = request.form['price']
+        departure_city = request.form['departure_city']
+        arrival_city = request.form['arrival_city']
+        departure_date = request.form['departure_date']
+        return_date = request.form.get('return_date')  # Опционально
+        price = request.form['flight_price']
 
         new_flight = Flight(
-            flight_number=flight_number,
-            departure=departure,
-            arrival=arrival,
+            departure=departure_city,
+            arrival=arrival_city,
+            departure_date=departure_date,
+            return_date=return_date,
             price=price
         )
 
@@ -201,7 +203,7 @@ def add_flight():
 @login_required
 def view_flights():
     flights = Flight.query.all()
-    return render_template('view_flights.html', flights=flights)
+    return render_template('flights.html', flights=flights)
 
 
 @app.route('/flights/edit/<int:flight_id>', methods=['GET', 'POST'])
@@ -210,16 +212,24 @@ def edit_flight(flight_id):
     flight = Flight.query.get_or_404(flight_id)
 
     if request.method == 'POST':
-        flight.flight_number = request.form['flight_number']
-        flight.departure = request.form['departure']
-        flight.arrival = request.form['arrival']
-        flight.price = request.form['price']
+        flight.departure = request.form['departure_city']
+        flight.arrival = request.form['arrival_city']
+        flight.departure_date = request.form['departure_date']
+        flight.return_date = request.form.get('return_date')
+        flight.price = request.form['flight_price']
 
         db.session.commit()
         flash('Рейс успешно обновлен!', 'success')
         return redirect(url_for('view_flights'))
 
     return render_template('edit_flight.html', flight=flight)
+
+
+@app.route('/flights/<int:flight_id>', methods=['GET'])
+@login_required
+def flight_details(flight_id):
+    flight = Flight.query.get_or_404(flight_id)
+    return render_template('flight_details.html', flight=flight)
 
 
 @app.route('/flights/delete/<int:flight_id>', methods=['POST'])
@@ -230,6 +240,7 @@ def delete_flight(flight_id):
     db.session.commit()
     flash('Рейс успешно удален!', 'info')
     return redirect(url_for('view_flights'))
+
 
 
 # Главная страница

@@ -2,7 +2,7 @@
 
 {% block content %}
 <h1>Создание нового рейса</h1>
-<form action="{{ url_for('create_flight') }}" method="post">
+<form action="{{ url_for('add_flight') }}" method="post">
     <div class="mb-3">
         <label for="departure_city" class="form-label">Откуда</label>
         <input type="text" class="form-control" name="departure_city" id="departure_city" required>
