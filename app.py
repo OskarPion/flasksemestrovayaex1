@@ -1,5 +1,6 @@
 import os
 from flask import Flask, render_template, request, redirect, url_for, flash, session, current_app
+from flask_wtf import CSRFProtect
 import requests
 import config
 from flask_sqlalchemy import SQLAlchemy
@@ -20,6 +21,9 @@ from models import User, Flight, Booking, Payment, Review
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 app = Flask(__name__)
+app.secret_key = 'gjknskjndskjnsfdkjb'
+csrf = CSRFProtect(app)
+csrf.init_app(app)
 
 # Конфигурация приложения
 app.config['SECRET_KEY'] = 's3cr3t_k3y_for_my_flask_app_12345'
@@ -177,17 +181,21 @@ def yandex_callback():
 @login_required
 def add_flight():
     if request.method == 'POST':
+        flight_number = request.form['flight_number']
+        airline = request.form['airline']
         departure_city = request.form['departure_city']
         arrival_city = request.form['arrival_city']
-        departure_date = request.form['departure_date']
-        return_date = request.form.get('return_date')  # Опционально
+        departure_time = request.form['departure_date']
+        arrival_time = request.form['return_date']
         price = request.form['flight_price']
 
         new_flight = Flight(
-            departure=departure_city,
-            arrival=arrival_city,
-            departure_date=departure_date,
-            return_date=return_date,
+            flight_number=flight_number,
+            airline=airline,
+            departure_city=departure_city,
+            arrival_city=arrival_city,
+            departure_time=departure_time,
+            arrival_time=arrival_time,
             price=price
         )
 
@@ -197,6 +205,8 @@ def add_flight():
         return redirect(url_for('view_flights'))
 
     return render_template('add_flight.html')
+
+
 
 
 @app.route('/flights', methods=['GET'])
@@ -240,6 +250,7 @@ def delete_flight(flight_id):
     db.session.commit()
     flash('Рейс успешно удален!', 'info')
     return redirect(url_for('view_flights'))
+
 
 
 

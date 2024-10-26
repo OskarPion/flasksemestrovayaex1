@@ -1,28 +1,62 @@
-{% extends "base.html" %}
-
-{% block content %}
-<h1>Создание нового рейса</h1>
-<form action="{{ url_for('add_flight') }}" method="post">
-    <div class="mb-3">
-        <label for="departure_city" class="form-label">Откуда</label>
-        <input type="text" class="form-control" name="departure_city" id="departure_city" required>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Добавить рейс</title>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-image: url('/static/aviasaleshoto11440x900.png'); /* Фоновое изображение */
+            background-size: cover;
+        }
+        .container {
+            margin-top: 50px; /* Отступ сверху */
+            background-color: rgba(255, 255, 255, 0.9); /* Прозрачный белый фон */
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center">Добавить рейс</h1>
+        <form action="{{ url_for('add_flight') }}" method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-3">
+                <label for="flight_number" class="form-label">Номер рейса</label>
+                <input type="text" class="form-control" name="flight_number" id="flight_number" required>
+            </div>
+            <div class="mb-3">
+                <label for="airline" class="form-label">Авиалиния</label>
+                <input type="text" class="form-control" name="airline" id="airline" required>
+            </div>
+            <div class="mb-3">
+                <label for="departure_city" class="form-label">Откуда</label>
+                <input type="text" class="form-control" name="departure_city" id="departure_city" required>
+            </div>
+            <div class="mb-3">
+                <label for="arrival_city" class="form-label">Куда</label>
+                <input type="text" class="form-control" name="arrival_city" id="arrival_city" required>
+            </div>
+            <div class="mb-3">
+                <label for="departure_date" class="form-label">Дата вылета</label>
+                <input type="date" class="form-control" name="departure_date" id="departure_date" required>
+            </div>
+            <div class="mb-3">
+                <label for="return_date" class="form-label">Дата возврата</label>
+                <input type="date" class="form-control" name="return_date" id="return_date">
+            </div>
+            <div class="mb-3">
+                <label for="flight_price" class="form-label">Цена</label>
+                <input type="number" class="form-control" name="flight_price" id="flight_price" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Создать рейс</button>
+        </form>
     </div>
-    <div class="mb-3">
-        <label for="arrival_city" class="form-label">Куда</label>
-        <input type="text" class="form-control" name="arrival_city" id="arrival_city" required>
-    </div>
-    <div class="mb-3">
-        <label for="departure_date" class="form-label">Дата вылета</label>
-        <input type="date" class="form-control" name="departure_date" id="departure_date" required>
-    </div>
-    <div class="mb-3">
-        <label for="return_date" class="form-label">Дата возврата</label>
-        <input type="date" class="form-control" name="return_date" id="return_date">
-    </div>
-    <div class="mb-3">
-        <label for="flight_price" class="form-label">Цена</label>
-        <input type="number" class="form-control" name="flight_price" id="flight_price" required>
-    </div>
-    <button type="submit" class="btn btn-custom">Создать рейс</button>
-</form>
-{% endblock %}
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>

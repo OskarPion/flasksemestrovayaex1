@@ -3,6 +3,7 @@
 <div class="container">
     <h2>Регистрация</h2>
     <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="mb-3">
     <label for="username" class="form-label">Имя пользователя:</label>
     <input type="text" id="username" name="username" class="form-control" required>

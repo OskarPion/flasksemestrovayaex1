@@ -61,6 +61,7 @@
     <div class="search-container">
         <h1>Поиск авиабилетов</h1>
         <form action="/search" method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label for="from">Откуда:</label>
             <input type="text" id="from" name="from" placeholder="Город вылета" required>
 
