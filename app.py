@@ -1,6 +1,7 @@
 import os
 from flask import Flask, render_template, request, redirect, url_for, flash, session, current_app
 from flask_wtf import CSRFProtect
+from datetime import datetime
 import requests
 import config
 from flask_sqlalchemy import SQLAlchemy
@@ -252,6 +253,52 @@ def delete_flight(flight_id):
     return redirect(url_for('view_flights'))
 
 
+@app.route('/bookings/add', methods=['GET', 'POST'])
+@login_required
+def add_booking():
+    if request.method == 'POST':
+        flight_id = request.form.get('flight_id')
+        status = request.form.get('status', 'confirmed')
+        new_booking = Booking(user_id=current_user.id, flight_id=flight_id, status=status,
+                              booking_date=datetime.utcnow())
+
+        db.session.add(new_booking)
+        db.session.commit()
+        flash('Бронирование успешно создано!')
+        return redirect(url_for('view_bookings'))
+
+    flights = Flight.query.all()  # Получаем список рейсов для выбора
+    return render_template('add_booking.html', flights=flights)  # Передача flights в шаблон
+
+
+@app.route('/bookings', methods=['GET'])
+@login_required
+def view_bookings():
+    bookings = Booking.query.filter_by(user_id=current_user.id).all()
+    return render_template('bookings.html', bookings=bookings)
+
+
+@app.route('/bookings/edit/<int:booking_id>', methods=['GET', 'POST'])
+@login_required
+def edit_booking(booking_id):
+    booking = Booking.query.get_or_404(booking_id)
+    if request.method == 'POST':
+        booking.status = request.form.get('status', booking.status)
+        db.session.commit()
+        flash('Бронирование обновлено!')
+        return redirect(url_for('view_bookings'))
+
+    return render_template('edit_booking.html', booking=booking)  # Передача booking в шаблон
+
+
+@app.route('/bookings/delete/<int:booking_id>', methods=['POST'])
+@login_required
+def delete_booking(booking_id):
+    booking = Booking.query.get_or_404(booking_id)
+    db.session.delete(booking)
+    db.session.commit()
+    flash('Бронирование успешно удалено!')
+    return redirect(url_for('view_bookings'))
 
 
 # Главная страница
