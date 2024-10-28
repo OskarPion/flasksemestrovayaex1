@@ -7,6 +7,7 @@ import config
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 from flask_dance.contrib.github import make_github_blueprint, github
 from flask_mail import Mail, Message
 from flask_migrate import Migrate
@@ -21,18 +22,24 @@ from models import User, Flight, Booking, Payment, Review
 # Flask configuration
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
+UPLOAD_FOLDER = 'static/uploads'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf'}
+
 app = Flask(__name__)
 app.secret_key = 'gjknskjndskjnsfdkjb'
+
+#CSRF DEFEND
 csrf = CSRFProtect(app)
 csrf.init_app(app)
 
+
 # Конфигурация приложения
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['SECRET_KEY'] = 's3cr3t_k3y_for_my_flask_app_12345'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:postgres@localhost/semestrflask1bd'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# Конфигурация соли для безопасности
 app.config['SECURITY_PASSWORD_SALT'] = 'my_super_secret_salt'
+
 
 # Настройки для почты
 app.config['MAIL_SERVER'] = 'smtp.mail.ru'
@@ -50,6 +57,9 @@ migrate.init_app(app, db)
 # Инициализация Flask-Login
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -176,6 +186,46 @@ def yandex_callback():
     else:
         flash('Ошибка при авторизации через Яндекс.', 'danger')
         return redirect(url_for('login'))
+
+
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+# Роут для загрузки файлов
+@app.route('/upload', methods=['GET', 'POST'])
+def upload_file():
+    if request.method == 'POST':
+        # Проверка на наличие файла в запросе
+        if 'file' not in request.files:
+            flash('Нет файла в запросе')
+            return redirect(request.url)
+
+        file = request.files['file']
+
+        # Если файл не выбран
+        if file.filename == '':
+            flash('Файл не выбран')
+            return redirect(request.url)
+
+        # Проверка на допустимый тип файла
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(file_path)
+            flash('Файл успешно загружен')
+            return redirect(url_for('view_files'))
+
+    return render_template('upload.html')
+
+# Роут для отображения списка загруженных файлов
+@app.route('/uploads')
+def view_files():
+    files = os.listdir(app.config['UPLOAD_FOLDER'])
+    # Создаем полный URL для каждого файла
+    file_urls = [url_for('static', filename=f'uploads/{file}') for file in files]
+    return render_template('view_files.html', files=file_urls)
 
 
 @app.route('/flights/add', methods=['GET', 'POST'])

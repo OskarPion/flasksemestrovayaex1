@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block content %}
+    <h1>Загруженные файлы</h1>
+    <div class="gallery">
+        {% for file in files %}
+            <div class="media-item">
+                {% if file.endswith(('png', 'jpg', 'jpeg', 'gif')) %}
+                    <img src="{{ url_for('static', filename='uploads/' ~ file) }}" alt="{{ file }}" width="200">
+                {% elif file.endswith('pdf') %}
+                    <a href="{{ url_for('static', filename='uploads/' ~ file) }}" target="_blank">{{ file }}</a>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+{% endblock %}
