@@ -23,7 +23,7 @@ from models import User, Flight, Booking, Payment, Review
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 UPLOAD_FOLDER = 'static/uploads'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf', 'mp4', 'mov', 'avi', 'docx', 'xlsx', 'pptx'}
 
 app = Flask(__name__)
 app.secret_key = 'gjknskjndskjnsfdkjb'
@@ -58,8 +58,6 @@ migrate.init_app(app, db)
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -188,44 +186,57 @@ def yandex_callback():
         return redirect(url_for('login'))
 
 
-
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 # Роут для загрузки файлов
+# Роут для загрузки файлов
 @app.route('/upload', methods=['GET', 'POST'])
 def upload_file():
     if request.method == 'POST':
-        # Проверка на наличие файла в запросе
         if 'file' not in request.files:
             flash('Нет файла в запросе')
             return redirect(request.url)
 
         file = request.files['file']
 
-        # Если файл не выбран
         if file.filename == '':
             flash('Файл не выбран')
             return redirect(request.url)
 
-        # Проверка на допустимый тип файла
+        # Проверка на допустимый тип файла и сохранение
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(file_path)
+
+            # Отладочный вывод для проверки сохранения файла
+            print(f'File saved at {file_path}')  # Добавьте эту строку
+
             flash('Файл успешно загружен')
             return redirect(url_for('view_files'))
 
     return render_template('upload.html')
 
-# Роут для отображения списка загруженных файлов
+
+# Роут для отображения загруженных файлов
 @app.route('/uploads')
 def view_files():
     files = os.listdir(app.config['UPLOAD_FOLDER'])
-    # Создаем полный URL для каждого файла
-    file_urls = [url_for('static', filename=f'uploads/{file}') for file in files]
+    file_urls = []
+
+    # Генерация URL и тип файла для корректного отображения
+    for file in files:
+        file_type = file.rsplit('.', 1)[1].lower()
+        file_urls.append({
+            'url': url_for('static', filename=f'uploads/{file}'),
+            'type': file_type
+        })
+
     return render_template('view_files.html', files=file_urls)
+
+
 
 
 @app.route('/flights/add', methods=['GET', 'POST'])

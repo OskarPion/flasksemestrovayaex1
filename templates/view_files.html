@@ -4,10 +4,17 @@
     <div class="gallery">
         {% for file in files %}
             <div class="media-item">
-                {% if file.endswith(('png', 'jpg', 'jpeg', 'gif')) %}
-                    <img src="{{ url_for('static', filename='uploads/' ~ file) }}" alt="{{ file }}" width="200">
-                {% elif file.endswith('pdf') %}
-                    <a href="{{ url_for('static', filename='uploads/' ~ file) }}" target="_blank">{{ file }}</a>
+                {% if file.type in ['png', 'jpg', 'jpeg', 'gif'] %}
+                    <img src="{{ file.url }}" alt="Image" width="200">
+                {% elif file.type == 'pdf' %}
+                    <a href="{{ file.url }}" target="_blank">{{ file.url.split('/')[-1] }}</a>
+                {% elif file.type in ['mp4', 'mov', 'avi'] %}
+                    <video width="200" controls>
+                        <source src="{{ file.url }}" type="video/{{ file.type }}">
+                        Ваш браузер не поддерживает видео-теги.
+                    </video>
+                {% else %}
+                    <a href="{{ file.url }}" target="_blank">Скачать {{ file.url.split('/')[-1] }}</a>
                 {% endif %}
             </div>
         {% endfor %}
