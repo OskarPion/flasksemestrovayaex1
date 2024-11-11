@@ -5,6 +5,7 @@ from datetime import datetime
 import requests
 import config
 from flask_sqlalchemy import SQLAlchemy
+from forms import LoginForm, RegistrationForm
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
@@ -61,11 +62,13 @@ login_manager.login_view = 'login'
 
 @login_manager.user_loader
 def load_user(user_id):
+    """Загружает пользователя по user_id для Flask-Login"""
     return User.query.get(int(user_id))
 
 
 # Валидация пароля
 def validate_password(password):
+    """Проверяет, что пароль соответствует минимальной длине"""
     if len(password) < 6:
         return False
     return True
@@ -73,11 +76,13 @@ def validate_password(password):
 
 # Функция для генерации токена
 def get_reset_token(user, expires_in=1800):
+    """Генерирует токен для сброса пароля пользователя"""
     s = Serializer(current_app.config['SECRET_KEY'])
     return s.dumps({'user_id': user.id}, salt=current_app.config['SECURITY_PASSWORD_SALT'])
 
 # Функция для проверки токена
 def verify_reset_token(token, expires_in=1800):
+    """ Проверяет валидность токена сброса пароля"""
     s = Serializer(current_app.config['SECRET_KEY'])
     try:
         user_id = s.loads(token, salt=current_app.config['SECURITY_PASSWORD_SALT'], max_age=expires_in)['user_id']
@@ -97,6 +102,7 @@ app.register_blueprint(github_blueprint, url_prefix="/github")
 
 @app.route('/github/callback')
 def github_callback():
+    """Callback для авторизации GitHub"""
     print("GitHub callback route hit!")  # Отладочное сообщение
 
     if not github.authorized:
@@ -138,6 +144,7 @@ yandex = OAuth2Session(YANDEX_CLIENT_ID, redirect_uri="http://127.0.0.1:5000/yan
 
 @app.route('/login/yandex')
 def yandex_login():
+    """Редирект на страницу авторизации Yandex"""
     # URL для запроса авторизации
     request_uri = yandex_client.prepare_request_uri(
         YANDEX_AUTHORIZATION_BASE_URL,
@@ -149,6 +156,7 @@ def yandex_login():
 
 @app.route('/yandex/callback')
 def yandex_callback():
+    """Callback для обработки ответа от Yandex после авторизации"""
     # Получаем токен после авторизации
     token = yandex.fetch_token(
         YANDEX_TOKEN_URL,
@@ -187,13 +195,14 @@ def yandex_callback():
 
 
 def allowed_file(filename):
+    """Проверяет, что файл имеет допустимое расширение"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 # Роут для загрузки файлов
-# Роут для загрузки файлов
 @app.route('/upload', methods=['GET', 'POST'])
 def upload_file():
+    """Загружает файл на сервер, если его расширение допустимо"""
     if request.method == 'POST':
         if 'file' not in request.files:
             flash('Нет файла в запросе')
@@ -223,6 +232,7 @@ def upload_file():
 # Роут для отображения загруженных файлов
 @app.route('/uploads')
 def view_files():
+    """Отображает список загруженных файлов"""
     files = os.listdir(app.config['UPLOAD_FOLDER'])
     file_urls = []
 
@@ -242,6 +252,7 @@ def view_files():
 @app.route('/flights/add', methods=['GET', 'POST'])
 @login_required
 def add_flight():
+    """Добавляет новый рейс в систему"""
     if request.method == 'POST':
         flight_number = request.form['flight_number']
         airline = request.form['airline']
@@ -274,6 +285,7 @@ def add_flight():
 @app.route('/flights', methods=['GET'])
 @login_required
 def view_flights():
+    """Отображает список всех рейсов"""
     flights = Flight.query.all()
     return render_template('flights.html', flights=flights)
 
@@ -281,6 +293,7 @@ def view_flights():
 @app.route('/flights/edit/<int:flight_id>', methods=['GET', 'POST'])
 @login_required
 def edit_flight(flight_id):
+    """Редактирует информацию о рейсе по ID"""
     flight = Flight.query.get_or_404(flight_id)
 
     if request.method == 'POST':
@@ -300,6 +313,7 @@ def edit_flight(flight_id):
 @app.route('/flights/<int:flight_id>', methods=['GET'])
 @login_required
 def flight_details(flight_id):
+    """Отображает подробности о рейсе по ID"""
     flight = Flight.query.get_or_404(flight_id)
     return render_template('flight_details.html', flight=flight)
 
@@ -307,6 +321,7 @@ def flight_details(flight_id):
 @app.route('/flights/delete/<int:flight_id>', methods=['POST'])
 @login_required
 def delete_flight(flight_id):
+    """Удаляет рейс из системы по ID"""
     flight = Flight.query.get_or_404(flight_id)
     db.session.delete(flight)
     db.session.commit()
@@ -317,6 +332,7 @@ def delete_flight(flight_id):
 @app.route('/bookings/add', methods=['GET', 'POST'])
 @login_required
 def add_booking():
+    """Создает новое бронирование рейса для пользователя"""
     if request.method == 'POST':
         flight_id = request.form.get('flight_id')
         status = request.form.get('status', 'confirmed')
@@ -335,6 +351,7 @@ def add_booking():
 @app.route('/bookings', methods=['GET'])
 @login_required
 def view_bookings():
+    """Отображает список всех бронирований пользователя"""
     bookings = Booking.query.filter_by(user_id=current_user.id).all()
     return render_template('bookings.html', bookings=bookings)
 
@@ -342,6 +359,7 @@ def view_bookings():
 @app.route('/bookings/edit/<int:booking_id>', methods=['GET', 'POST'])
 @login_required
 def edit_booking(booking_id):
+    """Редактирует бронирование по ID"""
     booking = Booking.query.get_or_404(booking_id)
     if request.method == 'POST':
         booking.status = request.form.get('status', booking.status)
@@ -355,6 +373,7 @@ def edit_booking(booking_id):
 @app.route('/bookings/delete/<int:booking_id>', methods=['POST'])
 @login_required
 def delete_booking(booking_id):
+    """Удаляет бронирование по ID"""
     booking = Booking.query.get_or_404(booking_id)
     db.session.delete(booking)
     db.session.commit()
@@ -371,16 +390,15 @@ def home():
 # Регистрация
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    if request.method == 'POST':
-        username = request.form['username']
-        email = request.form['email']
-        password = request.form['password']
+    form = RegistrationForm()
+    if form.validate_on_submit():
+        username = form.username.data
+        email = form.email.data
+        password = form.password.data
 
-        if '@' not in email:
-            flash('Неверный формат email.', 'danger')
-            return redirect(url_for('register'))
-        if not validate_password(password):
-            flash('Пароль должен быть длиной не менее 6 символов.', 'danger')
+        # Проверяем, существует ли email
+        if User.query.filter_by(email=email).first():
+            flash('Пользователь с таким email уже существует.', 'danger')
             return redirect(url_for('register'))
 
         user = User(username=username, email=email)
@@ -389,22 +407,21 @@ def register():
         db.session.commit()
         flash('Регистрация успешна! Войдите в систему.', 'success')
         return redirect(url_for('login'))
-    return render_template('register.html')
+
+    return render_template('register.html', form=form)
 
 
-# Вход в систему
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
-        user = User.query.filter_by(email=email).first()
-        if user and user.check_password(password):
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if user and user.check_password(form.password.data):
             login_user(user)
             flash('Успешный вход в систему!', 'success')
             return redirect(url_for('home'))
         flash('Неправильные учетные данные. Попробуйте снова.', 'danger')
-    return render_template('login.html')
+    return render_template('login.html', form=form)
 
 
 # Выход из системы
@@ -426,6 +443,7 @@ def profile():
 # Страница контактов
 @app.route('/contact', methods=['GET', 'POST'])
 def contact():
+    """Отправляет сообщение на страницу контактов"""
     if request.method == 'POST':
         message = request.form['message']
         flash('Сообщение отправлено!', 'success')
@@ -436,6 +454,7 @@ def contact():
 # Запрос на восстановление пароля
 @app.route('/reset_request', methods=['GET', 'POST'])
 def reset_request():
+    """Запрос на восстановление пароля"""
     if request.method == 'POST':
         email = request.form['email']
         user = User.query.filter_by(email=email).first()
@@ -450,6 +469,7 @@ def reset_request():
 # Восстановление пароля
 @app.route('/reset_password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
+    """Процедура сброса пароля по токену"""
     user = verify_reset_token(token)
     if not user:
         flash('Неверный или истекший токен.', 'danger')
@@ -472,6 +492,7 @@ def reset_password(token):
 
 
 def send_reset_email(user):
+    """Отправляет email для сброса пароля пользователю"""
     token = get_reset_token(user)
     reset_url = url_for('reset_password', token=token, _external=True)
 
@@ -501,6 +522,7 @@ city_to_iata = {
 @app.route('/search', methods=['POST'])
 @login_required
 def search():
+    """Выполняет поиск рейсов по заданным параметрам"""
     from_city_name = request.form['from']
     to_city_name = request.form['to']
     departure_date = request.form['departure']

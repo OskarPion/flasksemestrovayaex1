@@ -8,4 +8,3 @@ db = SQLAlchemy()
 mail = Mail()
 migrate = Migrate()
 login_manager = LoginManager()
-
