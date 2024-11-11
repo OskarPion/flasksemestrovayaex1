@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <h2>Профиль пользователя</h2>
+    <div class="mb-3">
+        <label for="username" class="form-label">Имя пользователя:</label>
+        <input type="text" id="username" name="username" class="form-control" value="{{ current_user.username }}" readonly>
+    </div>
+
+    <div class="mb-3">
+        <label for="email" class="form-label">Email:</label>
+        <input type="email" id="email" name="email" class="form-control" value="{{ current_user.email }}" readonly>
+    </div>
+
+    <a href="{{ url_for('reset_request') }}" class="btn btn-primary">Изменить пароль</a>
+</div>
+{% endblock %}

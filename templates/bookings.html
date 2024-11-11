@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h2 class="text-center mb-4">Ваши бронирования</h2>
+
+    <!-- Кнопка "Добавить бронирование" -->
+    <div class="mb-3 text-end">
+        <a href="{{ url_for('add_booking') }}" class="btn btn-success">Добавить бронирование</a>
+    </div>
+
+    <!-- Таблица бронирований -->
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Рейс</th>
+                <th>Дата бронирования</th>
+                <th>Статус</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for booking in bookings %}
+            <tr>
+                <td>{{ booking.flight.flight_number }} ({{ booking.flight.departure_city }} ➔ {{ booking.flight.arrival_city }})</td>
+                <td>{{ booking.booking_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>{{ booking.status }}</td>
+                <td>
+                    <a href="{{ url_for('edit_booking', booking_id=booking.id) }}" class="btn btn-sm btn-primary">Редактировать</a>
+                    <form action="{{ url_for('delete_booking', booking_id=booking.id) }}" method="post" style="display:inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Удалить бронирование?');">Удалить</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
